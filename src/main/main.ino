@@ -7,11 +7,15 @@ FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can1;
 
 #define CMD_SET_AXIS_STATE   0x07
 #define CMD_SET_INPUT_VEL    0x0D
+#define CMD_SET_INPUT_POS    0x0C
 #define CMD_HEARTBEAT        0x01
 #define CMD_ENCODER_EST     0x03
 
 #define AXIS_STATE_CLOSED_LOOP_CONTROL 8
 
+#define DEG_TO_RAD (3.14159265358979323846f / 180.0f)
+
+#define GEAR_RATIO 0.175f 
 /* -------------------------------------------------------- */
 
 void sendCAN(uint16_t id, const void *data, uint8_t len) {
@@ -33,6 +37,23 @@ void setVelocity(float vel, float torque_ff = 0.0f) {
   memcpy(data + 0, &vel, 4);
   memcpy(data + 4, &torque_ff, 4);
   sendCAN(id, data, 8);
+}
+
+void setPositionRad(float pos_rad, float vel_ff = 0.0f) {
+  uint16_t id = (ODRIVE_NODE_ID << 5) | CMD_SET_INPUT_POS;
+  
+  float adjusted_pos_rad = pos_rad * GEAR_RATIO;
+
+  uint8_t data[8];
+  memcpy(data + 0, &adjusted_pos_rad, 4);
+  memcpy(data + 4, &vel_ff, 4);
+
+  sendCAN(id, data, 8);
+}
+
+void setPosition(float pos_deg, float vel_ff = 0.0f) {
+  float pos_rad = pos_deg * DEG_TO_RAD;
+  setPositionRad(pos_rad, vel_ff);
 }
 
 /* ---------------- Setup ---------------- */
@@ -65,27 +86,35 @@ void loop() {
 
   switch (phase) {
     case 0: // forward
-      setVelocity(2.0f);
+      // setPosition(0.0f);
+      setPositionRad(0.0f);
       if (now - t0 > 3000) { t0 = now; phase = 1; }
+      Serial.println("0");
       break;
 
     case 1: // stop
-      setVelocity(0.0f);
+      // setPosition(90.0f);
+      setPositionRad(1.57f);
       if (now - t0 > 2000) { t0 = now; phase = 2; }
+      Serial.println("90");
       break;
 
     case 2: // reverse
-      setVelocity(-2.0f);
+      // setPosition(180.0f);
+      setPositionRad(3.1416f);
       if (now - t0 > 3000) { t0 = now; phase = 3; }
+      Serial.println("180");
       break;
 
     case 3: // stop
-      setVelocity(0.0f);
+      // setPosition(270.0f);
+      setPositionRad(4.7124f);
       if (now - t0 > 2000) { t0 = now; phase = 0; }
+      Serial.println("270");
       break;
   }
 
-  delay(10); // ~100 Hz command rate
+  delay(2000); // ~100 Hz command rate
 }
 
 /* ---------------- CAN RX ---------------- */
