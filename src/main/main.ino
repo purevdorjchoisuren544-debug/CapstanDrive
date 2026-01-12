@@ -4,7 +4,8 @@ FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can1;
 FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> Can3;
 
 /* ---------------- ODrive CAN definitions ---------------- */
-#define ODRIVE_NODE_ID 0
+#define ODRIVE_NODE_ID_ONE 0
+#define ODRIVE_NODE_ID_TWO 1
 
 #define CMD_SET_AXIS_STATE   0x07
 #define CMD_SET_INPUT_VEL    0x0D
@@ -34,18 +35,26 @@ void sendCAN(Motor motor_id, uint16_t id, const void *data, uint8_t len) {
   switch(motor_id){
     case Motor::ONE:
       Can1.write(msg);
+      Serial.println("Can 1 updated");
+      break;
     case Motor::TWO:
       Can3.write(msg);
+      Serial.println("Can 3 updated");
+      break;
   }
 }
 
 void setAxisState(Motor motor_id, uint32_t state) {
-  uint16_t id = (ODRIVE_NODE_ID << 5) | CMD_SET_AXIS_STATE;
+
+  uint8_t node = (motor_id == Motor::ONE) ? ODRIVE_NODE_ID_ONE : ODRIVE_NODE_ID_TWO;
+  uint16_t id = (node << 5) | CMD_SET_AXIS_STATE;
   sendCAN(motor_id, id, &state, 4);
 }
 
 void setVelocity(Motor motor_id, float vel, float torque_ff = 0.0f) {
-  uint16_t id = (ODRIVE_NODE_ID << 5) | CMD_SET_INPUT_VEL;
+
+  uint8_t node = (motor_id == Motor::ONE) ? ODRIVE_NODE_ID_ONE : ODRIVE_NODE_ID_TWO;
+  uint16_t id = (node << 5) | CMD_SET_INPUT_VEL;
   uint8_t data[8];
   memcpy(data + 0, &vel, 4);
   memcpy(data + 4, &torque_ff, 4);
@@ -53,7 +62,9 @@ void setVelocity(Motor motor_id, float vel, float torque_ff = 0.0f) {
 }
 
 void setPositionRad(Motor motor_id, float pos_rad, float vel_ff = 0.0f) {
-  uint16_t id = (ODRIVE_NODE_ID << 5) | CMD_SET_INPUT_POS;
+  
+  uint8_t node = (motor_id == Motor::ONE) ? ODRIVE_NODE_ID_ONE : ODRIVE_NODE_ID_TWO;
+  uint16_t id = (node << 5) | CMD_SET_INPUT_POS;
   
   float adjusted_pos_rad = pos_rad * GEAR_RATIO;
 
@@ -80,7 +91,13 @@ void setup() {
   Can1.enableFIFO();
   Can1.onReceive(canSniff);
 
+  Can3.begin();
+  Can3.setBaudRate(1000000);
+  Can3.enableFIFO();
+  Can3.onReceive(canSniff);
+
   Serial.println("CAN1 started");
+  Serial.println("CAN3 started");
 
   delay(1000);
 
@@ -144,7 +161,7 @@ void canSniff(const CAN_message_t &msg) {
   uint8_t node_id = msg.id >> 5;
   uint8_t cmd_id  = msg.id & 0x1F;
 
-  if (node_id != ODRIVE_NODE_ID) return;
+  if (node_id != ODRIVE_NODE_ID_ONE || node_id != ODRIVE_NODE_ID_TWO) return; //TODO: fix
 
   if (cmd_id == CMD_ENCODER_EST) {
     float pos, vel;
