@@ -1,6 +1,7 @@
 #include <FlexCAN_T4.h>
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can1;
+FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> Can3;
 
 /* ---------------- ODrive CAN definitions ---------------- */
 #define ODRIVE_NODE_ID 0
@@ -15,31 +16,43 @@ FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> Can1;
 
 #define DEG_TO_RAD (3.14159265358979323846f / 180.0f)
 
-#define GEAR_RATIO 0.175f 
+#define GEAR_RATIO 0.163f 
+
+enum Motor {
+    ONE,
+    TWO
+};
+
 /* -------------------------------------------------------- */
 
-void sendCAN(uint16_t id, const void *data, uint8_t len) {
+void sendCAN(Motor motor_id, uint16_t id, const void *data, uint8_t len) {
   CAN_message_t msg;
   msg.id  = id;
   msg.len = len;
   memcpy(msg.buf, data, len);
-  Can1.write(msg);
+
+  switch(motor_id){
+    case Motor::ONE:
+      Can1.write(msg);
+    case Motor::TWO:
+      Can3.write(msg);
+  }
 }
 
-void setAxisState(uint32_t state) {
+void setAxisState(Motor motor_id, uint32_t state) {
   uint16_t id = (ODRIVE_NODE_ID << 5) | CMD_SET_AXIS_STATE;
-  sendCAN(id, &state, 4);
+  sendCAN(motor_id, id, &state, 4);
 }
 
-void setVelocity(float vel, float torque_ff = 0.0f) {
+void setVelocity(Motor motor_id, float vel, float torque_ff = 0.0f) {
   uint16_t id = (ODRIVE_NODE_ID << 5) | CMD_SET_INPUT_VEL;
   uint8_t data[8];
   memcpy(data + 0, &vel, 4);
   memcpy(data + 4, &torque_ff, 4);
-  sendCAN(id, data, 8);
+  sendCAN(motor_id, id, data, 8);
 }
 
-void setPositionRad(float pos_rad, float vel_ff = 0.0f) {
+void setPositionRad(Motor motor_id, float pos_rad, float vel_ff = 0.0f) {
   uint16_t id = (ODRIVE_NODE_ID << 5) | CMD_SET_INPUT_POS;
   
   float adjusted_pos_rad = pos_rad * GEAR_RATIO;
@@ -48,12 +61,12 @@ void setPositionRad(float pos_rad, float vel_ff = 0.0f) {
   memcpy(data + 0, &adjusted_pos_rad, 4);
   memcpy(data + 4, &vel_ff, 4);
 
-  sendCAN(id, data, 8);
+  sendCAN(motor_id, id, data, 8);
 }
 
-void setPosition(float pos_deg, float vel_ff = 0.0f) {
+void setPosition(Motor motor_id, float pos_deg, float vel_ff = 0.0f) {
   float pos_rad = pos_deg * DEG_TO_RAD;
-  setPositionRad(pos_rad, vel_ff);
+  setPositionRad(motor_id, pos_rad, vel_ff);
 }
 
 /* ---------------- Setup ---------------- */
@@ -72,7 +85,8 @@ void setup() {
   delay(1000);
 
   /* Enter closed loop */
-  setAxisState(AXIS_STATE_CLOSED_LOOP_CONTROL);
+  setAxisState(Motor::ONE, AXIS_STATE_CLOSED_LOOP_CONTROL);
+  setAxisState(Motor::TWO, AXIS_STATE_CLOSED_LOOP_CONTROL);
   Serial.println("Requested CLOSED_LOOP_CONTROL");
 }
 
@@ -85,32 +99,39 @@ void loop() {
   uint32_t now = millis();
 
   switch (phase) {
-    case 0: // forward
-      // setPosition(0.0f);
-      setPositionRad(0.0f);
+    case 0: // 0
+      setPosition(Motor::ONE, 0.0f);
+      setPosition(Motor::TWO, 0.0f);
       if (now - t0 > 3000) { t0 = now; phase = 1; }
       Serial.println("0");
       break;
 
-    case 1: // stop
-      // setPosition(90.0f);
-      setPositionRad(1.57f);
+    case 1: // 90
+      setPosition(Motor::ONE, 90.0f);
+      setPosition(Motor::TWO, 90.0f);
       if (now - t0 > 2000) { t0 = now; phase = 2; }
       Serial.println("90");
       break;
 
-    case 2: // reverse
-      // setPosition(180.0f);
-      setPositionRad(3.1416f);
+    case 2: // 180
+      setPosition(Motor::ONE, 180.0f);
+      setPosition(Motor::TWO, 180.0f);
       if (now - t0 > 3000) { t0 = now; phase = 3; }
       Serial.println("180");
       break;
 
-    case 3: // stop
-      // setPosition(270.0f);
-      setPositionRad(4.7124f);
-      if (now - t0 > 2000) { t0 = now; phase = 0; }
+    case 3: // 270
+      setPosition(Motor::ONE, 270.0f);
+      setPosition(Motor::TWO, 270.0f);
+      if (now - t0 > 2000) { t0 = now; phase = 4; }
       Serial.println("270");
+      break;
+
+    case 4: // 360
+      setPosition(Motor::ONE, 360.0f);
+      setPosition(Motor::TWO, 360.0f);
+      if (now - t0 > 2000) { t0 = now; phase = 0; }
+      Serial.println("360");
       break;
   }
 
