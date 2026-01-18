@@ -7,7 +7,7 @@ FlexCAN_T4<CAN3, RX_SIZE_256, TX_SIZE_16> Can3;
 #define ODRIVE_NODE_ID_ONE 0
 #define ODRIVE_NODE_ID_TWO 1
 
-#define CMD_SET_VEL_LIMIT 0x0F
+// #define CMD_SET_VEL_LIMIT 0x0F
 #define CMD_SET_AXIS_STATE   0x07
 #define CMD_SET_INPUT_VEL    0x0D
 #define CMD_SET_INPUT_POS    0x0C
@@ -43,7 +43,7 @@ void loop() {
 
 void configurations(){
   Serial.begin(115200);
-  Serial.println("Code V7");
+  Serial.println("Code V8");
   delay(1000);
 
   Can1.begin();
@@ -67,8 +67,8 @@ void configurations(){
   setAxisState(Motor::TWO, AXIS_STATE_CLOSED_LOOP_CONTROL);
   Serial.println("Requested CLOSED_LOOP_CONTROL");
 
-  //setVelLimit(Motor::ONE, 0.5f);
-  //setVelLimit(Motor::TWO, 0.5f);
+  // setVelLimit(Motor::ONE, 26.0f);
+  // setVelLimit(Motor::TWO, 26.0f);
 }
 
 void run(){
@@ -81,15 +81,19 @@ void run(){
     case 0: // 0
       setPosition(Motor::ONE, 0.0f, 0.0f);
       setPosition(Motor::TWO, 0.0f, 0.0f);
-      if (now - t0 > 3000) { t0 = now; phase = 1; }
-      Serial.println("0");
+      if (now - t0 > 3000) { 
+        t0 = now; phase = 1; 
+        Serial.println("End of phase 0");
+      }
       break;
 
     case 1: // 90
-      setPosition(Motor::ONE, 270.0f);
-      setPosition(Motor::TWO, -270.0f);
-      if (now - t0 > 2000) { t0 = now; phase = 0; }
-      Serial.println("270");
+      setPosition(Motor::ONE, 270.0f, 0.0f);
+      setPosition(Motor::TWO, -270.0f, 0.0f);
+      if (now - t0 > 2000) { 
+        t0 = now; phase = 0; 
+        Serial.println("End of phase 1");
+      }
       break;
   }
 
@@ -132,11 +136,9 @@ void sendCAN(Motor motor_id, uint16_t id, const void *data, uint8_t len) {
   switch(motor_id){
     case Motor::ONE:
       Can1.write(msg);
-      Serial.println("Can 1 updated");
       break;
     case Motor::TWO:
       Can3.write(msg);
-      Serial.println("Can 3 updated");
       break;
   }
 }
@@ -148,17 +150,17 @@ void setAxisState(Motor motor_id, uint32_t state) {
   sendCAN(motor_id, id, &state, 4);
 }
 
-// void setVelLimit(Motor motor_id, float vel_turns_s) {
-//   uint8_t node = (motor_id == Motor::ONE) ? ODRIVE_NODE_ID_ONE : ODRIVE_NODE_ID_TWO;
-//   uint16_t id = (node << 5) | CMD_SET_VEL_LIMIT;
+void setVelLimit(Motor motor_id, float vel_turns_s) {
+  uint8_t node = (motor_id == Motor::ONE) ? ODRIVE_NODE_ID_ONE : ODRIVE_NODE_ID_TWO;
+  uint16_t id = (node << 5) | CMD_SET_VEL_LIMIT;
 
-//   CAN_message_t msg;
-//   msg.id = id;
-//   msg.len = 4;
-//   memcpy(msg.buf, &vel_turns_s, 4);
+  // CAN_message_t msg;
+  // msg.id = id;
+  // msg.len = 4;
+  // memcpy(msg.buf, &vel_turns_s, 4);
 
-//   sendCAN(motor_id, id, &vel_turns_s, 4);
-// }
+  sendCAN(motor_id, id, &vel_turns_s, 4);
+}
 
 
 void setVelocity(Motor motor_id, float vel, float torque_ff) {
